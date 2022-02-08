@@ -9,7 +9,7 @@ import pandas as pd
 from functools import reduce
 import OpenWordle
 
-os.chdir('C://Users//Carlton//Documents//Wordle')
+os.chdir('C:\\Users\\a47pqzz\\OneDrive - 3M\\Documents\\Wordle Solver')
 driver = OpenWordle.open_page()
 
 def get_overlay(known, unknown, options, df):
@@ -74,20 +74,27 @@ OpenWordle.type_word('dream',driver)
 OpenWordle.submit(driver)
 
 #Loop fiv timesl
-for guessNum in range(1,3):
-    
-    #Get the feedback
-    known, unknown, removals = OpenWordle.read_row(guessNum, driver)
-    [options.remove(letter) for letter in removals if letter is not None];
+for guessNum in range(1,5):
+    try:
+        #Get the feedback
+        known, unknown, removals = OpenWordle.read_row(guessNum, driver)
+        [options.remove(letter) for letter in removals if letter is not None];
+            
+        #Narrow the search
+        overlay = get_overlay(known, unknown, options, df)
+        df = df[overlay]
         
-    #Narrow the search
-    overlay = get_overlay(known, unknown, options, df)
-    df = df[overlay]
-    
-    #Submit the most likely word
-    
-    OpenWordle.type_word(df.iloc[0,:5],driver)
-    OpenWordle.submit(driver)
+        #Submit the most likely word
+        #Alternatively, if we didn't get any information, try another default word
+        if (guessNum == 1) and (removals == []) and (not any(unknown.values())) and (not any(known.values())):
+            OpenWordle.type_word('hoist', driver)
+        else:
+            OpenWordle.type_word(df.iloc[0,:5], driver)
+        
+        OpenWordle.submit(driver)
+    except:
+        pass
+            
     
 
 
