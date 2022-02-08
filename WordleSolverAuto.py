@@ -75,25 +75,22 @@ OpenWordle.submit(driver)
 
 #Loop fiv timesl
 for guessNum in range(1,5):
-    try:
-        #Get the feedback
-        known, unknown, removals = OpenWordle.read_row(guessNum, driver)
-        [options.remove(letter) for letter in removals if letter is not None];
-            
-        #Narrow the search
-        overlay = get_overlay(known, unknown, options, df)
-        df = df[overlay]
+    #Get the feedback
+    known, unknown, removals = OpenWordle.read_row(guessNum, driver)
+    [options.remove(letter) for letter in removals if letter is not None];
         
-        #Submit the most likely word
-        #Alternatively, if we didn't get any information, try another default word
-        if (guessNum == 1) and (removals == []) and (not any(unknown.values())) and (not any(known.values())):
-            OpenWordle.type_word('hoist', driver)
-        else:
-            OpenWordle.type_word(df.iloc[0,:5], driver)
-        
-        OpenWordle.submit(driver)
-    except:
-        pass
+    #Narrow the search
+    overlay = get_overlay(known, unknown, options, df)
+    df = df[overlay]
+    
+    #Submit the most likely word
+    #Alternatively, if we didn't get any information, try another default word
+    if (guessNum == 1) and (removals == []) and (not any(unknown.values())) and (not any(known.values())):
+        OpenWordle.type_word('hoist', driver)
+    else:
+        OpenWordle.type_word(df.iloc[0,:5], driver)
+    
+    OpenWordle.submit(driver)
             
     
 
