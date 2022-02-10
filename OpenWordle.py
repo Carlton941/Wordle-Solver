@@ -27,7 +27,7 @@ def type_word(word, driver):
 def read_row(rowNum, driver):
     unknown = {1:None, 2:None, 3:None, 4:None, 5:None}
     known = {1:None, 2:None, 3:None, 4:None, 5:None}
-    removals = []
+    removals = {1:None, 2:None, 3:None, 4:None, 5:None}
     for tileNum in range(1,6):
         js = 'return document.querySelector("body > game-app").shadowRoot.querySelector("#board > game-row:nth-child(' + str(rowNum) +')").shadowRoot.querySelector("div > game-tile:nth-child(' + str(tileNum) + ')")'
         gameTile = driver.execute_script(js)
@@ -38,7 +38,7 @@ def read_row(rowNum, driver):
         elif evaluation == 'present':
             unknown[tileNum] = letter
         else:
-            removals.append(letter)
+            removals[tileNum] = letter
     sleep(1)
     success = all(x is not None for x in known.values())
     return known, unknown, removals, success
