@@ -8,16 +8,28 @@ import os
 import pandas as pd
 from functools import reduce
 import OpenWordle
+from time import sleep
 
 os.chdir('C:\\Users\\a47pqzz\\OneDrive - 3M\\Documents\\Wordle Solver')
 driver = OpenWordle.open_page()
 
 def get_overlay(known, unknown, options, df):
-    #Get lists of overlays for each of the three conditions
+    #Get lists of overlays for each of the below conditions
+    #Word should only use letters that appear in the options list
     overlayOptionsList = [(df[index].apply(lambda letter: letter in options)) for index in range(1,6)]
-    overlayUnknownList1 = [df.apply(lambda row: (letter in row.values) | (letter is None), axis=1) for letter in unknown.values()]
+    
+    #Word should not have letters in yellow positions
+    # overlayUnknownList1 = [df.apply(lambda row: (letter in row.values) | (letter is None), axis=1) for letter in unknown.values()]
     overlayUnknownList2 = [((df[index] != unknown[index]) | (unknown[index] is None)) for index in range(1,6)]
+    
+    #Word must keep letters in green positions
     overlayKnownList = [((df[index] == known[index]) | (known[index] is None)) for index in range (1,6)]
+    
+    #Word should have at least as many copies of a letter as
+    #the total number of times that letter appears in unknown + known (yellow + green)
+    letterCounts = {}
+    [letterCounts.update({letter:sum(letter == x for x in (list(known.values()) + list(unknown.values())))}) for letter in set(list(known.values()) + list(unknown.values())) if letter is not None];
+    letterCountOverlayList = [df.apply(lambda row: sum(letter == x for x in row.values) >= letterCounts[letter], axis=1) for letter in letterCounts]
     
     #Combine each overlay list into one overlay.
     if overlayOptionsList:
@@ -25,10 +37,11 @@ def get_overlay(known, unknown, options, df):
     else:
         overlayOptions = [True]*len(df)
         
-    if overlayUnknownList1:
-        overlayUnknown1 = reduce(lambda x,y: x & y, overlayUnknownList1)
-    else:
-        overlayUnknown1 = [True]*len(df)
+    # if overlayUnknownList1:
+    #     overlayUnknown1 = reduce(lambda x,y: x & y, overlayUnknownList1)
+    # else:
+    #     overlayUnknown1 = [True]*len(df)
+    overlayUnknown1 = [True]*len(df)
         
     if overlayUnknownList2:
         overlayUnknown2 = reduce(lambda x,y: x & y, overlayUnknownList2)
@@ -39,9 +52,14 @@ def get_overlay(known, unknown, options, df):
         overlayKnown = reduce(lambda x,y: x & y, overlayKnownList)
     else:
         overlayKnown = [True]*len(df)
-    
+        
+    if letterCountOverlayList:
+        letterCountOverlay = reduce(lambda x,y: x & y, letterCountOverlayList)
+    else:
+        letterCountOverlay = [True]*len(df)
+        
     #Finally, combine the overlays into one and use it to filter the dataframe
-    overlay = overlayOptions & overlayUnknown1 & overlayUnknown2 & overlayKnown
+    overlay = overlayOptions & overlayUnknown1 & overlayUnknown2 & overlayKnown & letterCountOverlay
     return overlay
 
 ### Get the word dictionaries
@@ -67,30 +85,66 @@ scores = {'e':.111607, 'a':.084966, 'r':.075809, 'i':.075448, 'o':.071635, 't':.
 df['score'] = [sum(scores[word[pos]] for pos in range(5)) for word in wordList2]
 
 df = df.sort_values(by='score', ascending=False)
+ufdf = df.loc[:]
+ufdf['ufScore'] = [(sum((scores[word[pos]] if (word[pos] not in word[:pos]) else 0) for pos in range(5))) for word in wordList2]
+ufdf = ufdf.sort_values(by='ufScore', ascending=False)
 
-###Do the default first guess
+
+###Do the default first guess based on highest uniqueness-frequency score
 options = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-OpenWordle.type_word('dream',driver)
+ufOptions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+
+guess = ufdf.iloc[0,:5]
+[ufOptions.remove(letter) for letter in guess if letter in ufOptions];
+print("Gathering initial feedback with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))
+OpenWordle.type_word(ufdf.iloc[0,:5],driver)
 OpenWordle.submit(driver)
 
-#Loop fiv timesl
-for guessNum in range(1,5):
+
+#Loop five times
+correctLetters = 0;
+for guessNum in range(1,7):
     #Get the feedback
-    known, unknown, removals = OpenWordle.read_row(guessNum, driver)
-    [options.remove(letter) for letter in removals if letter is not None];
-        
+    known, unknown, removals, success = OpenWordle.read_row(guessNum, driver)
+    [options.remove(letter) for letter in removals if (letter is not None) and (letter in options)];
+    
+    #Check for win or loss condition
+    if success:
+        print("Correct!")
+        break
+    elif (guessNum == 6) and (not success):
+        print("Game over.")
+        break
+    
     #Narrow the search
     overlay = get_overlay(known, unknown, options, df)
     df = df[overlay]
+    print("There are {} possible options in list after filtering.".format(len(df)))
     
-    #Submit the most likely word
-    #Alternatively, if we didn't get any information, try another default word
-    if (guessNum == 1) and (removals == []) and (not any(unknown.values())) and (not any(known.values())):
-        OpenWordle.type_word('hoist', driver)
+    #Narrow the ufdf
+    ufOverlayList = [(ufdf[index].apply(lambda letter: letter in ufOptions)) for index in range(1,6)]
+    ufOverlay = reduce(lambda x,y: x & y, ufOverlayList)
+    ufdf = ufdf[ufOverlay]
+    
+    #Update correct letter count
+    correctLetters += (len([x for x in known.values() if x is not None]) + len([x for x in unknown.values() if x is not None]))
+    
+    #If we don't have enough information, gather more data by guessing letters we haven't tried yet
+    #Otherwise, try to guess the correct word.
+    if correctLetters <= 1:
+        guess = ufdf.iloc[0,:5]
+        print("Not enough information. Gathering more feedback with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))
     else:
-        OpenWordle.type_word(df.iloc[0,:5], driver)
+        guess = df.iloc[0,:5]
+        print("Attempting to guess answer with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))        
     
+    #Update ufOptions and submit
+    [ufOptions.remove(letter) for letter in guess if letter in ufOptions];
+    OpenWordle.type_word(guess, driver)
     OpenWordle.submit(driver)
+
+sleep(5)
+driver.close()
             
     
 

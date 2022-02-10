@@ -24704,6 +24704,7 @@ humorist
 humorous
 humorously
 humour
+humor
 humoured
 humouring
 humourless
