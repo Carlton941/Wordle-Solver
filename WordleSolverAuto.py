@@ -70,10 +70,15 @@ def get_overlay(known, unknown, options, df):
 
 ### Get the word dictionaries
 #Read the lists of words and names
-wordList = open('dictionary.txt').readlines()
+wordList = open('list of English words.txt').readlines() + open('more English words.txt').readlines()
+nameList = open('list of 5-letter names.txt').readlines()
+nameListLower = [x.lower()[:-1] for x in nameList]
+
+#Extract only five-letter non-name words without symbols or numbers, and remove newline characters
+wordList2 = [x[:-1].lower() for x in wordList if (len(x) == 6) & (x not in nameListLower) & (x[:-1].isalpha())]
 
 #Turn the words into 5-key dictionaries
-wordDict = [{1:x[0], 2:x[1], 3:x[2], 4:x[3], 5:x[4]} for x in wordList]
+wordDict = [{1:x[0], 2:x[1], 3:x[2], 4:x[3], 5:x[4]} for x in wordList2]
 
 #Make a dataframe with one column for each position in the word
 df = pd.DataFrame(wordDict)
@@ -83,9 +88,9 @@ df = pd.DataFrame(wordDict)
 scores = {'e':.111607, 'a':.084966, 'r':.075809, 'i':.075448, 'o':.071635, 't':.069509, 'n':.066544, 's':.057351, 'l':.054893, 'c':.045388, 'u':.036308, 'd':.033844, 'p':.031671, 'm':.030129, 'h':.030034, 'g':.024705, 'b':.02720, 'f':.018121, 'y':.017779, 'w':.012899, 'k':.011016, 'v':.010074, 'x':.002902, 'z':.002722, 'j':.001965, 'q':.01962}
 
 #Give each word in the dataframe a cumulative score
-df['score'] = [sum(scores[word[pos]] for pos in range(5)) for word in wordList]
+df['score'] = [sum(scores[word[pos]] for pos in range(5)) for word in wordList2]
 ufdf = df.loc[:]
-ufdf['ufScore'] = [(sum((scores[word[pos]] if (word[pos] not in word[:pos]) else 0) for pos in range(5))) for word in wordList]
+ufdf['ufScore'] = [(sum((scores[word[pos]] if (word[pos] not in word[:pos]) else 0) for pos in range(5))) for word in wordList2]
 
 df = df.sort_values(by='score', ascending=False)
 ufdf = ufdf.sort_values(by='ufScore', ascending=False)
