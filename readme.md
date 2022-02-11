@@ -1,4 +1,4 @@
-#required dependencies to install 
+# required dependencies to install 
 
 ### python
 - https://www.python.org/downloads/
