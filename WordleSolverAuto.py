@@ -10,7 +10,7 @@ from functools import reduce
 import OpenWordle
 from time import sleep
 
-os.chdir('C:\\Users\\a47pqzz\\OneDrive - 3M\\Documents\\Wordle Solver')
+# os.chdir('C:\\Users\\a47pqzz\\OneDrive - 3M\\Documents\\Wordle Solver')
 driver = OpenWordle.open_page()
 
 def get_overlay(known, unknown, options, df):
@@ -70,7 +70,7 @@ def get_overlay(known, unknown, options, df):
 
 ### Get the word dictionaries
 #Read the lists of words and names
-wordList = open('list of English words.txt').readlines() + open('more English words.txt').readlines()
+wordList = open('Dictionary.txt')
 nameList = open('list of 5-letter names.txt').readlines()
 nameListLower = [x.lower()[:-1] for x in nameList]
 
