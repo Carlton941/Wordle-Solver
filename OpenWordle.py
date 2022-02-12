@@ -45,7 +45,7 @@ def read_row(rowNum, driver):
 
 def open_page():
     #Get the webdriver
-    driver = webdriver.Chrome(executable_path='C:\\Program Files\\Chrome Driver\\chromedriver.exe')
+    driver = webdriver.Chrome(executable_path='C:\Program Files\chromedriver_win32\chromedriver.exe')
     
     #Open the wordle webpage
     driver.get('https://www.powerlanguage.co.uk/wordle/')
