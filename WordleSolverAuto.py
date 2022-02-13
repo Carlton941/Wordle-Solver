@@ -6,7 +6,6 @@ Created on Fri Feb  4 20:09:37 2022
 """
 import os
 import pandas as pd
-import numpy as np
 from functools import reduce
 import OpenWordle
 from time import sleep
@@ -69,19 +68,28 @@ def get_overlay(known, unknown, options, df):
 def get_scores(df):
     #positionalScores has a list of fractions for each letter, in each position
     #This can be used to find the word that will refine the options the most
-    positionalScores = [df[index].value_counts()/len(df) for index in range(1,6)]
+    positionalScores = [df[index].value_counts()/(5*len(df)) for index in range(1,6)]
     
     #totalScores is the total fraction of each letter in any position
     #This can be used to find the word that is most likely to give us a letter
     totalScores = {'a':0, 'b':0, 'c':0, 'd':0, 'e':0, 'f':0, 'g':0, 'h':0, 'i':0, 'j':0, 'k':0, 'l':0, 'm':0, 'n':0, 'o':0, 'p':0, 'q':0, 'r':0, 's':0, 't':0, 'u':0, 'v':0, 'w':0, 'x':0, 'y':0, 'z':0}
+    
+    #Or, perhaps, maxScores, which uses the max positional score for each letter?
+    #This will not bias towards duplicates of particularly common letters.
+    #In fact, it will bias against duplicate letters since the word
+    #will not get 5 score contributions
+    maxScores = {'a':0, 'b':0, 'c':0, 'd':0, 'e':0, 'f':0, 'g':0, 'h':0, 'i':0, 'j':0, 'k':0, 'l':0, 'm':0, 'n':0, 'o':0, 'p':0, 'q':0, 'r':0, 's':0, 't':0, 'u':0, 'v':0, 'w':0, 'x':0, 'y':0, 'z':0}
+
     for seq in positionalScores:
         for letter in seq.index:
-            totalScores[letter] += seq[letter]/5
+            totalScores[letter] += seq[letter]
+            maxScores[letter] = max(maxScores[letter], seq[letter])
+
         
     #Calculate the net positional and total scores for every word
     df['positionalScore'] = df.apply(lambda x: sum(positionalScores[index-1][x[index]] for index in range(1,6)), axis=1)
     df['totalScore'] = df.apply(lambda x: sum(totalScores[x[index]] for index in range(1,6)), axis=1)
-    
+    df['maxScore'] = df.apply(lambda x: sum(maxScores[x[index]] for index in range(1,6) if x[index] not in list(x[:index-1])), axis=1)
     return df
     
 
@@ -91,12 +99,10 @@ def get_word(df, haveClue, guessedLetters):
     #and also no duplicate letters OR letters that have been guessed so far
     if not haveClue:
         filterFun = (lambda x: all(y not in guessedLetters for y in x))
-        #Don't use np.argmax!! this gives the numerical position, rather than the .loc key
-        #find a way to get .loc from pandas argmax or something?
         key = df[(df.noDupes) & (df.apply(filterFun, axis=1))].totalScore.idxmax()
     #Otherwise, guess the word with the highest positionalScore, ignoring duplicates
     else:
-        key = df.positionalScore.idxmax()
+        key = df.maxScore.idxmax()
         
     return df.loc[key, [1,2,3,4,5]]                
                 
@@ -131,7 +137,7 @@ removals = {1:None, 2:None, 3:None, 4:None, 5:None}
 success = False
 
 #Loop five times
-for guessNum in range(1,6):
+for guessNum in range(1,7):
     #Get the words' frequency scores
     df = get_scores(df)
     
