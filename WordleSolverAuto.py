@@ -14,8 +14,8 @@ driver = OpenWordle.open_page()
 
 def get_overlay(known, unknown, options, df):
     #Get lists of overlays for each of the below conditions
-    #Word should only use letters that appear in the options list
-    overlayOptionsList1 = [(df[index].apply(lambda letter: (letter in options) | (letter == known[index]))) for index in range(1,6)]
+    #Word should only use letters that appear in the options list or letters 
+    overlayOptionsList1 = [(df[index].apply(lambda letter: (letter in options) | (letter == known[index]) | (letter in unknown.values()))) for index in range(1,6)]
     overlayOptionsList2 = [((df[index] != removals[index]) | (removals[index] is None)) for index in range(1,6)]
     
     #Word should not have letters in yellow positions
@@ -29,7 +29,7 @@ def get_overlay(known, unknown, options, df):
     #the total number of times that letter appears in unknown + known (yellow + green)
     letterCounts = {}
     [letterCounts.update({letter:sum(letter == x for x in (list(known.values()) + list(unknown.values())))}) for letter in set(list(known.values()) + list(unknown.values())) if letter is not None];
-    letterCountOverlayList = [df.apply(lambda row: sum(letter == x for x in row.values) >= letterCounts[letter], axis=1) for letter in letterCounts]
+    letterCountOverlayList = [df.apply(lambda row: (sum(letter == x for x in row.values) >= letterCounts[letter]) if letter in options else (sum(letter == x for x in row.values) == letterCounts[letter]), axis=1) for letter in letterCounts]
     
     #Combine each overlay list into one overlay.
     if overlayOptionsList1:
@@ -102,6 +102,7 @@ def get_word(df, haveClue, guessedLetters):
         key = df[(df.noDupes) & (df.apply(filterFun, axis=1))].totalScore.idxmax()
     #Otherwise, guess the word with the highest positionalScore, ignoring duplicates
     else:
+        # key = df.positionalScore.idxmax()
         key = df.maxScore.idxmax()
         
     return df.loc[key, [1,2,3,4,5]]                
