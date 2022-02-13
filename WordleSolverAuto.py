@@ -6,11 +6,11 @@ Created on Fri Feb  4 20:09:37 2022
 """
 import os
 import pandas as pd
+import numpy as np
 from functools import reduce
 import OpenWordle
 from time import sleep
 
-# os.chdir('C:\\Users\\a47pqzz\\OneDrive - 3M\\Documents\\Wordle Solver')
 driver = OpenWordle.open_page()
 
 def get_overlay(known, unknown, options, df):
@@ -43,10 +43,6 @@ def get_overlay(known, unknown, options, df):
     else:
         overlayOptions2 = [True]*len(df)
         
-    # if overlayUnknownList1:
-    #     overlayUnknown1 = reduce(lambda x,y: x & y, overlayUnknownList1)
-    # else:
-    #     overlayUnknown1 = [True]*len(df)
     overlayUnknown1 = [True]*len(df)
         
     if overlayUnknownList2:
@@ -68,90 +64,113 @@ def get_overlay(known, unknown, options, df):
     overlay = overlayOptions1 & overlayOptions2 & overlayUnknown1 & overlayUnknown2 & overlayKnown & letterCountOverlay
     return overlay
 
+
+#Calculate frequency scores of the letters, then the words
+def get_scores(df):
+    #positionalScores has a list of fractions for each letter, in each position
+    #This can be used to find the word that will refine the options the most
+    positionalScores = [df[index].value_counts()/len(df) for index in range(1,6)]
+    
+    #totalScores is the total fraction of each letter in any position
+    #This can be used to find the word that is most likely to give us a letter
+    totalScores = {'a':0, 'b':0, 'c':0, 'd':0, 'e':0, 'f':0, 'g':0, 'h':0, 'i':0, 'j':0, 'k':0, 'l':0, 'm':0, 'n':0, 'o':0, 'p':0, 'q':0, 'r':0, 's':0, 't':0, 'u':0, 'v':0, 'w':0, 'x':0, 'y':0, 'z':0}
+    for seq in positionalScores:
+        for letter in seq.index:
+            totalScores[letter] += seq[letter]/5
+        
+    #Calculate the net positional and total scores for every word
+    df['positionalScore'] = df.apply(lambda x: sum(positionalScores[index-1][x[index]] for index in range(1,6)), axis=1)
+    df['totalScore'] = df.apply(lambda x: sum(totalScores[x[index]] for index in range(1,6)), axis=1)
+    
+    return df
+    
+
+#Choose a word to guess
+def get_word(df, haveClue, guessedLetters):
+    #If no letters are known yet, use the word with the highest totalScore 
+    #and also no duplicate letters OR letters that have been guessed so far
+    if not haveClue:
+        filterFun = (lambda x: all(y not in guessedLetters for y in x))
+        #Don't use np.argmax!! this gives the numerical position, rather than the .loc key
+        #find a way to get .loc from pandas argmax or something?
+        key = df[(df.noDupes) & (df.apply(filterFun, axis=1))].totalScore.idxmax()
+    #Otherwise, guess the word with the highest positionalScore, ignoring duplicates
+    else:
+        key = df.positionalScore.idxmax()
+        
+    return df.loc[key, [1,2,3,4,5]]                
+                
+
 ### Get the word dictionaries
 #Read the lists of words and names
-wordList = open('Dictionary.txt')
+words = open('Dictionary.txt')
 nameList = open('list of 5-letter names.txt').readlines()
 nameListLower = [x.lower()[:-1] for x in nameList]
 
 #Extract only five-letter non-name words without symbols or numbers, and remove newline characters
-wordList2 = [x[:-1].lower() for x in wordList if (len(x) == 6) & (x not in nameListLower) & (x[:-1].isalpha())]
+wordList = [x[:-1].lower() for x in words if (len(x) == 6) & (x not in nameListLower) & (x[:-1].isalpha())]
 
 #Turn the words into 5-key dictionaries
-wordDict = [{1:x[0], 2:x[1], 3:x[2], 4:x[3], 5:x[4]} for x in wordList2]
+wordDict = [{1:x[0], 2:x[1], 3:x[2], 4:x[3], 5:x[4]} for x in wordList]
 
 #Make a dataframe with one column for each position in the word
 df = pd.DataFrame(wordDict)
-
-#The (approximate) frequencies of the letters in English
-#These will act as proxies for value
-scores = {'e':.111607, 'a':.084966, 'r':.075809, 'i':.075448, 'o':.071635, 't':.069509, 'n':.066544, 's':.057351, 'l':.054893, 'c':.045388, 'u':.036308, 'd':.033844, 'p':.031671, 'm':.030129, 'h':.030034, 'g':.024705, 'b':.02720, 'f':.018121, 'y':.017779, 'w':.012899, 'k':.011016, 'v':.010074, 'x':.002902, 'z':.002722, 'j':.001965, 'q':.01962}
-
-#Give each word in the dataframe a cumulative score
-df['score'] = [sum(scores[word[pos]] for pos in range(5)) for word in wordList2]
-ufdf = df.loc[:]
-ufdf['ufScore'] = [(sum((scores[word[pos]] if (word[pos] not in word[:pos]) else 0) for pos in range(5))) for word in wordList2]
-
-df = df.sort_values(by='score', ascending=False)
-ufdf = ufdf.sort_values(by='ufScore', ascending=False)
-df = df[df.duplicated(keep='last')]
-ufdf = ufdf[ufdf.duplicated(keep='last')]
+df['noDupes'] = df.apply(lambda x: len(set(x))==5, axis=1)
+df = df.drop_duplicates()
 
 ###Do the default first guess based on highest uniqueness-frequency score
 options = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-ufOptions = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+guessedLetters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 
-guess = ufdf.iloc[0,:5]
-[ufOptions.remove(letter) for letter in guess if letter in ufOptions];
-print("Gathering initial feedback with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))
-OpenWordle.type_word(ufdf.iloc[0,:5],driver)
-OpenWordle.submit(driver)
-
+#Initialize the feedback variables
+haveClue = False
+guessedLetters = []
+known = {1:None, 2:None, 3:None, 4:None, 5:None}
+unknown = {1:None, 2:None, 3:None, 4:None, 5:None}
+removals = {1:None, 2:None, 3:None, 4:None, 5:None}
+success = False
 
 #Loop five times
-correctLetters = 0;
 for guessNum in range(1,6):
-    #Get the feedback
+    #Get the words' frequency scores
+    df = get_scores(df)
+    
+    #Choose a word to guess
+    guess = get_word(df, haveClue, guessedLetters)
+    
+    #Write the guess to the webpage
+    print("\nGuessing '" + reduce(lambda x,y:x+y, guess) + "'...")
+    OpenWordle.type_word(guess, driver)
+    OpenWordle.submit(driver)
+    
+    #Get the feedback from the webpage
     known, unknown, removals, success = OpenWordle.read_row(guessNum, driver)
-    [options.remove(letter) for letter in removals.values() if (letter is not None) and (letter in options)];
     
     #Check for win or loss condition
-    # if success:
-    #     print("Correct!")
-    #     break
-    # elif (guessNum == 6) and (not success):
-    #     print("Game over.")
-    #     break
+    if success:
+        print("\nCorrect!")
+        break
+    elif (guessNum == 6) and (not success):
+        print("\nGame over.")
+        break
+    
+    #Record the guessed letters
+    [guessedLetters.append(letter) for letter in guess if letter not in guess]
+    
+    #Remove the non-present letters
+    [options.remove(letter) for letter in removals.values() if (letter is not None) and (letter in options)];
     
     #Narrow the search
     overlay = get_overlay(known, unknown, options, df)
     df = df[overlay]
-    print("There are {} possible options in list after filtering.".format(len(df)))
+    print("There are {} possible options in list after this guess.".format(len(df)))
     
-    #Narrow the ufdf
-    ufOverlayList = [(ufdf[index].apply(lambda letter: letter in ufOptions)) for index in range(1,6)]
-    ufOverlay = reduce(lambda x,y: x & y, ufOverlayList)
-    ufdf = ufdf[ufOverlay]
-    
-    #Update correct letter count
-    correctLetters += (len([x for x in known.values() if x is not None]) + len([x for x in unknown.values() if x is not None]))
-    
-    #If we don't have enough information, gather more data by guessing letters we haven't tried yet
-    #Otherwise, try to guess the correct word.
-    if correctLetters <= 1:
-        guess = ufdf.iloc[0,:5]
-        print("Not enough information. Gathering more feedback with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))
-    else:
-        guess = df.iloc[0,:5]
-        print("Attempting to guess answer with '{}'.\n".format(reduce(lambda x,y: x+y, guess)))        
-    
-    #Update ufOptions and submit
-    [ufOptions.remove(letter) for letter in guess if letter in ufOptions];
-    OpenWordle.type_word(guess, driver)
-    OpenWordle.submit(driver)
+    #The first time we get a clue, swap haveClue to True
+    if any(known.values()) | any (unknown.values()):
+        haveClue = True
 
-# sleep(5)
-# driver.close()
+sleep(3)
+driver.close()
             
     
 

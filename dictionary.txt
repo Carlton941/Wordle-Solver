@@ -36910,7 +36910,6 @@ lutist
 lutjanidae
 lutjanus
 lutose
-lutra
 lutrinae
 lutzen
 luvaridae
